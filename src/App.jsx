@@ -6,7 +6,7 @@ import {
   ShieldCheck, ArrowRight, Camera, X, Check, 
   Store, Edit, Settings, UploadCloud, FileCheck,
   Printer, MessageCircle, ChevronDown, ChevronUp,
-  Map
+  Map, Calendar
 } from 'lucide-react';
 
 // --- MOCK DATA ---
@@ -27,8 +27,29 @@ const initialProducts = [
 ];
 
 const mockRegisteredCustomers = [
-  { id: 1, name: 'Agus Santoso', phone: '081234567890', address: 'Jl. Melati No. 5, Banyuwangi' },
-  { id: 2, name: 'Siti Aminah', phone: '085678901234', address: 'Perum Gading Raya Blok B2' }
+  { id: 1, name: 'Agus Santoso', phone: '081234567890', address: 'Jl. Melati No. 5, Banyuwangi', password: 'password123' },
+  { id: 2, name: 'Siti Aminah', phone: '085678901234', address: 'Perum Gading Raya Blok B2', password: 'password123' }
+];
+
+// Data Pesanan Contoh (agar bisa langsung di tes login sebagai Agus / 081234567890)
+const mockOrderHistory = [
+  {
+    id: 'BFF-20231026-001',
+    date: '26 Oktober 2023, 10:30',
+    rawDate: new Date('2023-10-26T10:30:00Z').toISOString(),
+    customerName: 'Agus Santoso',
+    customerPhone: '081234567890',
+    items: [
+      { id: 1, name: 'Nugget Ayam Premium', price: 28000, quantity: 2 },
+      { id: 3, name: 'Dimsum Ayam', price: 25000, quantity: 1 }
+    ],
+    total: 91000,
+    paymentMethod: 'transfer',
+    deliveryMethod: 'delivery',
+    note: 'Mohon cepat dikirim ya',
+    proofUploaded: 'bukti_tf_agus.jpg',
+    status: 'Diproses'
+  }
 ];
 
 const formatRupiah = (number) => {
@@ -46,7 +67,7 @@ export default function App() {
   const [products, setProducts] = useState(initialProducts);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cart, setCart] = useState([]);
-  const [orderHistory, setOrderHistory] = useState([]);
+  const [orderHistory, setOrderHistory] = useState(mockOrderHistory); // Diisi mock data
   const [registeredCustomers, setRegisteredCustomers] = useState(mockRegisteredCustomers);
   
   // User States
@@ -72,6 +93,12 @@ export default function App() {
   const [storeInfo, setStoreInfo] = useState({ address: 'Jl. Ahmad Yani No. 10, Banyuwangi, Jawa Timur', mapsLink: 'https://maps.google.com/', waNumber: '6281234567890', deliveryFee: 10000 });
   const [bankAccounts, setBankAccounts] = useState([{ id: 1, bank: 'BCA', accNumber: '8234567890', owner: 'Bumma Frozen Food' }]);
 
+  // Password Settings State
+  const [adminPassword, setAdminPassword] = useState('admin');
+  const [adminPassForm, setAdminPassForm] = useState({ old: '', new: '', confirm: '' });
+  const [isChangingPass, setIsChangingPass] = useState(false);
+  const [userPassForm, setUserPassForm] = useState({ old: '', new: '', confirm: '' });
+
   // Admin Dashboard States
   const [adminTab, setAdminTab] = useState('ringkasan');
   const [showProductForm, setShowProductForm] = useState(false);
@@ -79,6 +106,10 @@ export default function App() {
   const [expandedCustomer, setExpandedCustomer] = useState(null);
   const [editingBank, setEditingBank] = useState(null);
   const [bankForm, setBankForm] = useState({ bank: '', accNumber: '', owner: '' });
+  
+  // Admin Laporan States
+  const [reportStart, setReportStart] = useState('');
+  const [reportEnd, setReportEnd] = useState('');
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -98,22 +129,38 @@ export default function App() {
   const handleAuth = (e) => {
     e.preventDefault();
     if (authMode === 'login') {
-      if (loginForm.phone === 'admin' && loginForm.password === 'admin') {
-        setCurrentUser({ name: 'Owner Bumma', phone: 'Admin', role: 'admin' });
-        showToast('Berhasil masuk sebagai Admin');
-        setCurrentScreen('main'); setActiveTab('admin'); setAdminTab('ringkasan');
+      const phoneInput = loginForm.phone.trim();
+      
+      // Logika Login Admin
+      if (phoneInput === 'admin') {
+        if (loginForm.password === adminPassword) {
+          setCurrentUser({ name: 'Owner Bumma', phone: 'Admin', role: 'admin' });
+          showToast('Berhasil masuk sebagai Admin');
+          setCurrentScreen('main'); setActiveTab('admin'); setAdminTab('ringkasan');
+        } else {
+          showToast('Password admin salah!');
+        }
         return;
       }
-      if (!loginForm.phone || !loginForm.password) { showToast('Mohon lengkapi nomor WA dan Password'); return; }
       
-      const existingUser = registeredCustomers.find(c => c.phone === loginForm.phone);
-      const userToLogin = existingUser ? { ...existingUser, role: 'user' } : { name: 'Pelanggan Setia', phone: loginForm.phone, address: 'Alamat lengkap...', role: 'user' };
+      if (!phoneInput || !loginForm.password) { showToast('Mohon lengkapi nomor WA dan Password'); return; }
       
-      setCurrentUser(userToLogin);
-      showToast('Berhasil masuk!');
+      // Logika Login Pelanggan
+      const existingUser = registeredCustomers.find(c => c.phone === phoneInput);
+      if (existingUser) {
+        if (existingUser.password !== loginForm.password) {
+          showToast('Password salah!'); return;
+        }
+        setCurrentUser({ ...existingUser, role: 'user' });
+        showToast('Berhasil masuk!');
+      } else {
+        showToast('Akun tidak ditemukan, silakan daftar terlebih dahulu.');
+        return;
+      }
     } else {
-      if (!registerForm.name || !registerForm.phone) { showToast('Mohon lengkapi data wajib (Nama & No WA)'); return; }
-      const newCust = { name: registerForm.name, phone: registerForm.phone, address: registerForm.address || 'Alamat belum diisi', role: 'user' };
+      const phoneInput = registerForm.phone.trim();
+      if (!registerForm.name || !phoneInput || !registerForm.password) { showToast('Mohon lengkapi data wajib (Nama, No WA & Password)'); return; }
+      const newCust = { name: registerForm.name, phone: phoneInput, address: registerForm.address || 'Alamat belum diisi', role: 'user', password: registerForm.password };
       setCurrentUser(newCust);
       setRegisteredCustomers([...registeredCustomers, { ...newCust, id: Date.now() }]);
       showToast('Akun berhasil dibuat!');
@@ -140,6 +187,20 @@ export default function App() {
     
     setIsEditingProfile(false);
     showToast('Profil berhasil diperbarui!');
+  };
+
+  const handleUpdateUserPassword = (e) => {
+    e.preventDefault();
+    if (userPassForm.old !== currentUser.password) { showToast('Password lama salah!'); return; }
+    if (userPassForm.new !== userPassForm.confirm) { showToast('Password baru tidak cocok!'); return; }
+    
+    const updatedUser = { ...currentUser, password: userPassForm.new };
+    setCurrentUser(updatedUser);
+    setRegisteredCustomers(prev => prev.map(c => c.phone === currentUser.phone ? updatedUser : c));
+    
+    setIsChangingPass(false);
+    setUserPassForm({ old: '', new: '', confirm: '' });
+    showToast('Password berhasil diperbarui!');
   };
 
   const addToCart = (product, qty = 1, showNotification = true) => {
@@ -175,6 +236,7 @@ export default function App() {
     const newOrder = {
       id: invoiceId,
       date: new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute:'2-digit' }),
+      rawDate: new Date().toISOString(),
       customerName: currentUser?.name || 'Tamu',
       customerPhone: currentUser?.phone || '',
       items: [...cart],
@@ -197,7 +259,8 @@ export default function App() {
     }
   };
 
-  const confirmViaWA = (order) => {
+  const confirmViaWA = (order, e) => {
+    if (e) e.preventDefault(); // Mencegah reload halaman
     let message = `Assalamu'alaikum Admin Bumma Frozen Food.\nSaya ingin mengkonfirmasi pesanan saya:\n\n*Invoice:* ${order.id}\n*Nama:* ${order.customerName}\n*Layanan:* ${order.deliveryMethod === 'delivery' ? 'Delivery Lokal' : 'Ambil di Toko'}\n*Metode:* ${order.paymentMethod === 'tunai' ? 'Tunai (Cash)' : 'Transfer Bank'}\n*Total:* ${formatRupiah(order.total)}\n\n*Daftar Belanja:*\n`;
     order.items.forEach(item => { message += `- ${item.name} (${item.quantity}x)\n`; });
     if (order.note) message += `\n*Catatan:* ${order.note}`;
@@ -239,6 +302,51 @@ export default function App() {
     `;
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     printWindow.document.write('<html><head><title>Struk Pesanan</title></head><body style="margin:0; padding:10px;">' + printContent + '</body></html>');
+    printWindow.document.close();
+    setTimeout(() => { printWindow.print(); }, 500);
+  };
+
+  const handlePrintReport = () => {
+    let filtered = orderHistory.filter(o => o.status !== 'Dibatalkan');
+    if (reportStart && reportEnd) {
+       const sTime = new Date(reportStart).getTime();
+       const eTime = new Date(reportEnd).getTime() + 86399999; // + 1 hari full
+       filtered = filtered.filter(o => {
+         const oTime = new Date(o.rawDate).getTime();
+         return oTime >= sTime && oTime <= eTime;
+       });
+    }
+    
+    const totalRev = filtered.reduce((sum, o) => sum + o.total, 0);
+    const totalTrx = filtered.length;
+    
+    const printContent = `
+      <div style="width: 58mm; font-family: monospace; font-size: 12px; margin: 0 auto; color: #000;">
+        <div style="text-align:center; margin-bottom: 10px;">
+          <h2 style="margin:0; font-size: 16px;">LAPORAN TRANSAKSI</h2>
+          <p style="margin:2px 0;">Bumma Frozen Food</p>
+          <p style="margin:2px 0; font-size: 10px;">${reportStart && reportEnd ? reportStart + ' s/d ' + reportEnd : 'Semua Waktu'}</p>
+        </div>
+        <div style="border-bottom: 1px dashed #000; margin-bottom: 10px;"></div>
+        <p style="margin:2px 0;">Total Trx  : ${totalTrx}</p>
+        <p style="margin:2px 0;">Pendapatan : ${formatRupiah(totalRev)}</p>
+        <div style="border-bottom: 1px dashed #000; margin-top: 10px; margin-bottom: 10px;"></div>
+        <p style="font-weight:bold;">Rincian Pesanan:</p>
+        ${filtered.map(o => `
+          <div style="margin-bottom: 8px;">
+            <div style="font-size:10px;">${o.id} - ${o.date.split(',')[0]}</div>
+            <div style="display:flex; justify-content:space-between; font-weight:bold;">
+              <span>${o.customerName.split(' ')[0]}</span>
+              <span>${o.total}</span>
+            </div>
+          </div>
+        `).join('')}
+        <div style="border-bottom: 1px dashed #000; margin-top: 10px; margin-bottom: 10px;"></div>
+        <p style="text-align:center; font-weight:bold;">*** SELESAI ***</p>
+      </div>
+    `;
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    printWindow.document.write('<html><head><title>Laporan Transaksi</title></head><body style="margin:0; padding:10px;">' + printContent + '</body></html>');
     printWindow.document.close();
     setTimeout(() => { printWindow.print(); }, 500);
   };
@@ -295,13 +403,23 @@ export default function App() {
       setBankForm({ bank: '', accNumber: '', owner: '' });
     };
 
+    const handleSaveAdminPassword = (e) => {
+      e.preventDefault();
+      if (adminPassForm.old !== adminPassword) { showToast('Password lama salah!'); return; }
+      if (adminPassForm.new !== adminPassForm.confirm) { showToast('Password baru tidak cocok!'); return; }
+      setAdminPassword(adminPassForm.new);
+      setAdminPassForm({ old: '', new: '', confirm: '' });
+      showToast('Password Admin berhasil diperbarui!');
+    };
+
     return (
       <div className="min-h-screen bg-gray-50 pb-24">
         {/* Admin Header */}
         <div className="bg-white pt-6 pb-4 px-4 sticky top-0 z-20 shadow-sm flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-200 bg-white">
-               <img src="Logo_Bumma-removebg-preview.jpg" alt="Logo" className="w-full h-full object-contain" />
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-200 bg-white p-0.5 flex items-center justify-center">
+               <img src="Logo_Bumma-removebg-preview.jpg" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }} alt="Logo" className="w-full h-full object-contain mix-blend-multiply" />
+               <div className="hidden w-full h-full items-center justify-center text-green-600 font-bold font-serif text-lg">B</div>
             </div>
             <h1 className="font-bold text-lg text-green-800">Owner Panel</h1>
           </div>
@@ -324,16 +442,34 @@ export default function App() {
                 </div>
               </div>
               
+              {/* Form Laporan by Date */}
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                 <h2 className="font-bold text-gray-800 mb-3 flex items-center gap-2 border-b pb-2"><Calendar className="w-4 h-4 text-green-600"/> Cetak Laporan</h2>
+                 <div className="flex gap-2 mb-3">
+                   <div className="flex-1">
+                     <label className="text-[10px] text-gray-500 font-semibold block mb-1">Mulai Tanggal</label>
+                     <input type="date" value={reportStart} onChange={(e) => setReportStart(e.target.value)} className="w-full text-xs p-2 border border-gray-200 bg-gray-50 rounded outline-none focus:border-green-500"/>
+                   </div>
+                   <div className="flex-1">
+                     <label className="text-[10px] text-gray-500 font-semibold block mb-1">Sampai Tanggal</label>
+                     <input type="date" value={reportEnd} onChange={(e) => setReportEnd(e.target.value)} className="w-full text-xs p-2 border border-gray-200 bg-gray-50 rounded outline-none focus:border-green-500"/>
+                   </div>
+                 </div>
+                 <button onClick={handlePrintReport} className="w-full bg-gray-800 text-white py-2.5 rounded-lg text-xs font-bold hover:bg-gray-700 flex items-center justify-center gap-1.5 transition-colors">
+                   <Printer className="w-3.5 h-3.5"/> Cetak / Simpan PDF
+                 </button>
+              </div>
+
               <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                  <h2 className="font-bold text-gray-800 mb-3 flex items-center gap-2 border-b pb-2"><User className="w-4 h-4 text-green-600"/> Data Pelanggan Terdaftar</h2>
                  <div className="space-y-3">
                    {registeredCustomers.map((cust, i) => {
                      const stats = getCustomerStats(cust.phone);
-                     const isExpanded = expandedCustomer === cust.phone;
+                     const isExpanded = expandedCustomer === cust.id; // Diperbaiki memakai cust.id bukan phone agar aman
                      return (
                        <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden">
                          <div 
-                           onClick={() => setExpandedCustomer(isExpanded ? null : cust.phone)}
+                           onClick={() => setExpandedCustomer(isExpanded ? null : cust.id)}
                            className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-100 transition-colors"
                          >
                             <div className="flex items-center gap-3">
@@ -452,10 +588,32 @@ export default function App() {
                    <p className="text-gray-400 text-sm text-center py-4">Belum ada pesanan masuk.</p>
                  ) : (
                    orderHistory.map(order => (
-                     <div key={order.id} className="border border-gray-200 rounded-xl p-3 bg-gray-50 shadow-sm">
+                     <div key={order.id} className="border border-gray-200 rounded-xl p-3 bg-gray-50 shadow-sm relative">
                        <div className="flex justify-between items-center mb-2 border-b border-gray-200 pb-2">
                          <div><span className="text-[10px] text-gray-500 block">{order.date}</span><span className="text-xs font-bold text-gray-800">{order.id}</span></div>
-                         <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded text-[10px] font-bold">{order.status}</span>
+                         
+                         {/* Dropdown Update Status Transaksi */}
+                         <select 
+                           value={order.status} 
+                           onChange={(e) => {
+                             const newHistory = orderHistory.map(o => o.id === order.id ? {...o, status: e.target.value} : o);
+                             setOrderHistory(newHistory);
+                             showToast(`Status pesanan diperbarui!`);
+                           }}
+                           className={`text-[10px] font-bold px-2 py-1 rounded outline-none cursor-pointer border appearance-none text-center
+                             ${order.status === 'Menunggu Pembayaran' ? 'bg-red-50 text-red-600 border-red-200' : 
+                               order.status === 'Diproses' ? 'bg-blue-50 text-blue-600 border-blue-200' :
+                               order.status === 'Selesai' ? 'bg-green-50 text-green-600 border-green-200' : 
+                               'bg-orange-50 text-orange-600 border-orange-200'
+                             }`}
+                         >
+                            <option value="Menunggu Pembayaran">Menunggu Pembayaran</option>
+                            <option value="Menunggu Verifikasi">Menunggu Verifikasi</option>
+                            <option value="Diproses">Diproses</option>
+                            <option value="Selesai">Selesai</option>
+                            <option value="Dibatalkan">Dibatalkan</option>
+                         </select>
+
                        </div>
                        <p className="text-sm font-bold text-gray-800 mb-1">{order.customerName}</p>
                        <p className="text-xs text-gray-600 mb-2">Total: <span className="text-green-600 font-bold">{formatRupiah(order.total)}</span> • {order.paymentMethod === 'tunai' ? 'Tunai' : 'Transfer'}</p>
@@ -498,6 +656,25 @@ export default function App() {
                     </div>
                     <button onClick={() => showToast('Pengaturan disimpan!')} className="w-full bg-gray-800 text-white py-2.5 rounded-lg text-sm font-bold mt-2 hover:bg-gray-900 transition-colors">Simpan Perubahan</button>
                  </div>
+               </div>
+
+               <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                 <h2 className="font-bold text-gray-800 mb-4 border-b pb-2">Keamanan Akun Admin</h2>
+                 <form onSubmit={handleSaveAdminPassword} className="space-y-3">
+                    <div>
+                      <label className="text-xs text-gray-500 font-semibold">Password Lama</label>
+                      <input required type="password" value={adminPassForm.old} onChange={(e) => setAdminPassForm({...adminPassForm, old: e.target.value})} className="w-full border border-gray-200 bg-gray-50 rounded-lg p-2.5 text-sm mt-1 outline-none focus:border-green-500"/>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 font-semibold">Password Baru</label>
+                      <input required type="password" value={adminPassForm.new} onChange={(e) => setAdminPassForm({...adminPassForm, new: e.target.value})} className="w-full border border-gray-200 bg-gray-50 rounded-lg p-2.5 text-sm mt-1 outline-none focus:border-green-500"/>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 font-semibold">Konfirmasi Password Baru</label>
+                      <input required type="password" value={adminPassForm.confirm} onChange={(e) => setAdminPassForm({...adminPassForm, confirm: e.target.value})} className="w-full border border-gray-200 bg-gray-50 rounded-lg p-2.5 text-sm mt-1 outline-none focus:border-green-500"/>
+                    </div>
+                    <button type="submit" className="w-full bg-orange-500 text-white py-2.5 rounded-lg text-sm font-bold mt-2 hover:bg-orange-600 transition-colors">Ubah Password Admin</button>
+                 </form>
                </div>
                
                <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
@@ -548,7 +725,8 @@ export default function App() {
         <div className="relative mb-4">
           <div className="absolute inset-0 bg-white rounded-full blur-xl opacity-70"></div>
           <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-2xl p-1 overflow-hidden border-4 border-green-400 relative z-10">
-            <img src="Logo_Bumma-removebg-preview.jpg" alt="Logo Bumma" className="w-full h-full object-contain rounded-full bg-white"/>
+            <img src="Logo_Bumma-removebg-preview.jpg" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }} alt="Logo Bumma" className="w-full h-full object-contain rounded-full bg-white mix-blend-multiply"/>
+            <div className="hidden w-full h-full items-center justify-center text-green-600 font-bold font-serif text-6xl">B</div>
           </div>
           <div className="absolute -right-4 top-2 bg-orange-500 text-white text-[9px] font-bold px-2 py-1 rounded-full shadow-lg rotate-12 z-20 border-2 border-white">Lebih Praktis</div>
           <div className="absolute -left-4 bottom-2 bg-yellow-400 text-yellow-900 text-[9px] font-bold px-2 py-1 rounded-full shadow-lg -rotate-6 z-20 border-2 border-white">Siap Saji</div>
@@ -621,8 +799,9 @@ export default function App() {
                 {currentUser.name.charAt(0).toUpperCase()}
               </div>
             ) : (
-              <div onClick={() => { if(!currentUser) { setAuthMode('login'); setCurrentScreen('auth'); } }} className="w-10 h-10 bg-white rounded-full p-0.5 shadow-sm border border-green-300 flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity bg-white">
-                <img src="Logo_Bumma-removebg-preview.jpg" alt="Logo" className="w-full h-full object-contain rounded-full" />
+              <div onClick={() => { if(!currentUser) { setAuthMode('login'); setCurrentScreen('auth'); } }} className="w-10 h-10 bg-white rounded-full p-0.5 shadow-sm border border-green-300 flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center overflow-hidden">
+                <img src="Logo_Bumma-removebg-preview.jpg" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }} alt="Logo" className="w-full h-full object-contain rounded-full mix-blend-multiply" />
+                <div className="hidden w-full h-full items-center justify-center text-green-600 font-bold font-serif text-xl">B</div>
               </div>
             )}
           </div>
@@ -856,6 +1035,32 @@ export default function App() {
                     </div>
                   </div>
 
+                  {isChangingPass ? (
+                    <form onSubmit={handleUpdateUserPassword} className="w-full text-left bg-gray-50 p-4 rounded-xl border border-gray-100 mb-5 animate-fade-in-down space-y-3 shadow-sm">
+                      <p className="text-sm font-bold text-gray-800 border-b border-gray-200 pb-2 mb-2">Ubah Password</p>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 block mb-1">Password Lama</label>
+                        <input type="password" required value={userPassForm.old} onChange={e => setUserPassForm({...userPassForm, old: e.target.value})} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-green-500"/>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 block mb-1">Password Baru</label>
+                        <input type="password" required value={userPassForm.new} onChange={e => setUserPassForm({...userPassForm, new: e.target.value})} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-green-500"/>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 block mb-1">Konfirmasi Password Baru</label>
+                        <input type="password" required value={userPassForm.confirm} onChange={e => setUserPassForm({...userPassForm, confirm: e.target.value})} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-green-500"/>
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <button type="submit" className="flex-1 bg-orange-500 text-white py-2 rounded-lg text-xs font-bold hover:bg-orange-600 transition-all shadow-sm">Simpan</button>
+                        <button type="button" onClick={() => {setIsChangingPass(false); setUserPassForm({old:'', new:'', confirm:''});}} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg text-xs font-bold hover:bg-gray-300 transition-all">Batal</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button onClick={() => setIsChangingPass(true)} className="w-full py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold text-sm shadow-sm hover:bg-gray-50 active:scale-95 transition-all mb-3">
+                      Ubah Password
+                    </button>
+                  )}
+
                   <button onClick={() => {setCurrentUser(null); setCurrentScreen('splash'); setActiveTab('home');}} className="w-full py-3 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold text-sm shadow-sm hover:bg-red-100 active:scale-95 transition-all">
                     Keluar Akun
                   </button>
@@ -901,7 +1106,11 @@ export default function App() {
               <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                 <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
                   <div><p className="text-xs text-gray-500">{order.date}</p><p className="font-bold text-gray-800 text-sm">{order.id}</p></div>
-                  <span className="bg-orange-100 text-orange-600 px-2 py-1 rounded text-[10px] font-bold">{order.status}</span>
+                  <span className={`px-2 py-1 rounded text-[10px] font-bold 
+                    ${order.status === 'Selesai' ? 'bg-green-100 text-green-600' : 
+                      order.status === 'Dibatalkan' ? 'bg-red-100 text-red-600' : 
+                      order.status === 'Diproses' ? 'bg-blue-100 text-blue-600' : 
+                      'bg-orange-100 text-orange-600'}`}>{order.status}</span>
                 </div>
                 
                 <p className="font-bold text-green-600 text-lg mb-2">{formatRupiah(order.total)}</p>
@@ -922,9 +1131,31 @@ export default function App() {
                   </div>
                 )}
 
-                <button onClick={() => confirmViaWA(order)} className="w-full bg-[#25D366] text-white py-3 rounded-xl text-sm font-bold shadow-md flex justify-center items-center gap-2 hover:bg-[#20b858] active:scale-95 transition-all">
-                  <MessageCircle className="w-5 h-5"/> Konfirmasi ke WhatsApp Admin
-                </button>
+                {order.status === 'Menunggu Pembayaran' || order.status === 'Menunggu Verifikasi' ? (
+                  <button onClick={(e) => confirmViaWA(order, e)} className="w-full bg-[#25D366] text-white py-3 rounded-xl text-sm font-bold shadow-md flex justify-center items-center gap-2 hover:bg-[#20b858] active:scale-95 transition-all">
+                    <MessageCircle className="w-5 h-5"/> Konfirmasi ke WhatsApp Admin
+                  </button>
+                ) : order.status === 'Dibatalkan' ? (
+                  <div className="mt-3 bg-red-50 p-3 rounded-xl border border-red-100 flex items-start gap-3">
+                    <X className="w-5 h-5 text-red-500 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-red-800 mb-0.5">Pesanan Dibatalkan</p>
+                      <p className="text-[10px] text-red-600 leading-relaxed">Transaksi ini telah dibatalkan oleh sistem atau admin.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 bg-green-50 p-3 rounded-xl border border-green-100 flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-green-800 mb-0.5">{order.status === 'Selesai' ? 'Pesanan Selesai' : 'Pembayaran Berhasil'}</p>
+                      <p className="text-[10px] text-green-700 leading-relaxed">
+                        {order.status === 'Selesai' 
+                          ? 'Terima kasih telah berbelanja di Bumma Frozen Food.' 
+                          : 'Pesanan Anda sedang disiapkan dan diproses oleh toko.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             ))
           )}
