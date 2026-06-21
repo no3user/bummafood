@@ -10,8 +10,7 @@ import {
 } from 'lucide-react';
 
 // --- MOCK DATA ---
-const categories = [
-  { id: 'all', name: 'Semua Produk', icon: '🍽️' },
+const initialCategories = [
   { id: 'nugget', name: 'Nugget', icon: '🍗' },
   { id: 'sosis', name: 'Sosis', icon: '🌭' },
   { id: 'dimsum', name: 'Dimsum', icon: '🥟' },
@@ -64,10 +63,11 @@ export default function App() {
   const [authRedirectTarget, setAuthRedirectTarget] = useState(null);
   
   // Data States
+  const [storeCategories, setStoreCategories] = useState(initialCategories);
   const [products, setProducts] = useState(initialProducts);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cart, setCart] = useState([]);
-  const [orderHistory, setOrderHistory] = useState(mockOrderHistory); // Diisi mock data
+  const [orderHistory, setOrderHistory] = useState(mockOrderHistory); 
   const [registeredCustomers, setRegisteredCustomers] = useState(mockRegisteredCustomers);
   
   // User States
@@ -101,8 +101,11 @@ export default function App() {
 
   // Admin Dashboard States
   const [adminTab, setAdminTab] = useState('ringkasan');
+  const [adminProductTab, setAdminProductTab] = useState('produk'); 
   const [showProductForm, setShowProductForm] = useState(false);
-  const [productForm, setProductForm] = useState({ id: null, name: '', price: '', stock: '', category: 'nugget', image: '', desc: '', weight: '500 gram', composition: '', storage: 'Simpan di freezer (-18°C)', expired: '12 bulan', saranPenyajian: '', showDetails: true });
+  const [productForm, setProductForm] = useState({ id: null, name: '', price: '', stock: '', category: '', image: '', desc: '', weight: '500 gram', composition: '', storage: 'Simpan di freezer (-18°C)', expired: '12 bulan', saranPenyajian: '', showDetails: true });
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [categoryForm, setCategoryForm] = useState({ id: null, name: '', icon: '📦' });
   const [expandedCustomer, setExpandedCustomer] = useState(null);
   const [editingBank, setEditingBank] = useState(null);
   const [bankForm, setBankForm] = useState({ bank: '', accNumber: '', owner: '' });
@@ -221,6 +224,19 @@ export default function App() {
   const grandTotal = cartTotal > 0 ? (cartTotal + deliveryFee) : 0;
 
   const handleCheckoutClick = () => {
+    if (!currentUser) {
+      showToast('Silakan daftar/masuk untuk melanjutkan pesanan.');
+      setAuthRedirectTarget('checkout'); 
+      setAuthMode('register');
+      setCurrentScreen('auth');
+    } else {
+      setCurrentScreen('checkout');
+    }
+  };
+
+  // Logika Khusus untuk Tombol "Beli Sekarang"
+  const handleBuyNowClick = (product) => {
+    addToCart(product, 1, false);
     if (!currentUser) {
       showToast('Silakan daftar/masuk untuk melanjutkan pesanan.');
       setAuthRedirectTarget('checkout'); 
@@ -390,6 +406,19 @@ export default function App() {
       setShowProductForm(false);
     };
 
+    const handleSaveCategory = (e) => {
+      e.preventDefault();
+      if (categoryForm.id) {
+        setStoreCategories(storeCategories.map(c => c.id === categoryForm.id ? categoryForm : c));
+        showToast('Kategori diperbarui!');
+      } else {
+        const newId = categoryForm.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        setStoreCategories([...storeCategories, { ...categoryForm, id: newId }]);
+        showToast('Kategori baru ditambahkan!');
+      }
+      setShowCategoryForm(false);
+    };
+
     const handleSaveBank = (e) => {
       e.preventDefault();
       if (editingBank === 'new') {
@@ -463,11 +492,11 @@ export default function App() {
               <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                  <h2 className="font-bold text-gray-800 mb-3 flex items-center gap-2 border-b pb-2"><User className="w-4 h-4 text-green-600"/> Data Pelanggan Terdaftar</h2>
                  <div className="space-y-3">
-                   {registeredCustomers.map((cust, i) => {
+                   {registeredCustomers.map((cust) => {
                      const stats = getCustomerStats(cust.phone);
-                     const isExpanded = expandedCustomer === cust.id; // Diperbaiki memakai cust.id bukan phone agar aman
+                     const isExpanded = expandedCustomer === cust.id; 
                      return (
-                       <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden">
+                       <div key={cust.id} className="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden">
                          <div 
                            onClick={() => setExpandedCustomer(isExpanded ? null : cust.id)}
                            className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-100 transition-colors"
@@ -512,70 +541,128 @@ export default function App() {
 
           {adminTab === 'produk' && (
              <div className="animate-fade-in-down">
-                {!showProductForm ? (
-                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-center mb-4 border-b pb-2">
-                      <h2 className="font-bold text-gray-800">Katalog Produk</h2>
-                      <button onClick={() => { setProductForm({ id: null, name: '', price: '', stock: '', category: 'nugget', image: '', desc: '', weight: '500 gram', composition: '', storage: 'Simpan di freezer (-18°C)', expired: '12 bulan', saranPenyajian: '', showDetails: true }); setShowProductForm(true); }} className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"><Plus className="w-3 h-3"/> Tambah</button>
-                    </div>
-                    <div className="space-y-3">
-                      {products.map(p => (
-                        <div key={p.id} className="flex justify-between items-center border border-gray-100 p-2 rounded-xl bg-gray-50">
-                          <div className="flex gap-3 items-center">
-                            <div className="w-12 h-12 bg-white rounded-lg overflow-hidden border border-gray-200"><img src={p.image} className="w-full h-full object-cover" alt={p.name}/></div>
-                            <div>
-                              <p className="text-sm font-semibold text-gray-800 leading-tight">{p.name}</p>
-                              <p className="text-[10px] font-bold text-green-600">{formatRupiah(p.price)} <span className="text-gray-400 font-normal">• Stok: {p.stock}</span></p>
+                <div className="flex gap-2 mb-4 bg-gray-200 p-1 rounded-xl">
+                  <button onClick={() => setAdminProductTab('produk')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${adminProductTab === 'produk' ? 'bg-white shadow-sm text-green-700' : 'text-gray-500 hover:text-gray-700'}`}>Daftar Produk</button>
+                  <button onClick={() => setAdminProductTab('kategori')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${adminProductTab === 'kategori' ? 'bg-white shadow-sm text-green-700' : 'text-gray-500 hover:text-gray-700'}`}>Daftar Kategori</button>
+                </div>
+
+                {adminProductTab === 'produk' ? (
+                  !showProductForm ? (
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                      <div className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 className="font-bold text-gray-800">Katalog Produk</h2>
+                        <button onClick={() => { setProductForm({ id: null, name: '', price: '', stock: '', category: storeCategories[0]?.id || '', image: '', desc: '', weight: '500 gram', composition: '', storage: 'Simpan di freezer (-18°C)', expired: '12 bulan', saranPenyajian: '', showDetails: true }); setShowProductForm(true); }} className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"><Plus className="w-3 h-3"/> Tambah</button>
+                      </div>
+                      <div className="space-y-3">
+                        {products.map(p => (
+                          <div key={p.id} className="flex justify-between items-center border border-gray-100 p-2 rounded-xl bg-gray-50">
+                            <div className="flex gap-3 items-center">
+                              <div className="w-12 h-12 bg-white rounded-lg overflow-hidden border border-gray-200"><img src={p.image} className="w-full h-full object-cover" alt={p.name}/></div>
+                              <div>
+                                <p className="text-sm font-semibold text-gray-800 leading-tight">{p.name}</p>
+                                <p className="text-[10px] font-bold text-green-600">{formatRupiah(p.price)} <span className="text-gray-400 font-normal">• Stok: {p.stock}</span></p>
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              <button className="p-2 bg-white border border-blue-100 text-blue-600 rounded-lg hover:bg-blue-50" onClick={() => { setProductForm(p); setShowProductForm(true); }}><Edit className="w-4 h-4"/></button>
+                              <button className="p-2 bg-white border border-red-100 text-red-600 rounded-lg hover:bg-red-50" onClick={() => { setProducts(products.filter(x => x.id !== p.id)); showToast('Produk dihapus!'); }}><Trash2 className="w-4 h-4"/></button>
                             </div>
                           </div>
-                          <div className="flex gap-1">
-                            <button className="p-2 bg-white border border-blue-100 text-blue-600 rounded-lg hover:bg-blue-50" onClick={() => { setProductForm(p); setShowProductForm(true); }}><Edit className="w-4 h-4"/></button>
-                            <button className="p-2 bg-white border border-red-100 text-red-600 rounded-lg hover:bg-red-50" onClick={() => { setProducts(products.filter(x => x.id !== p.id)); showToast('Produk dihapus!'); }}><Trash2 className="w-4 h-4"/></button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveProduct} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                      <div className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 className="font-bold text-gray-800">{productForm.id ? 'Edit Produk' : 'Tambah Produk Baru'}</h2>
+                        <button type="button" onClick={() => setShowProductForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-semibold text-gray-600 block mb-1">Foto Produk (WebP/JPG, Rasio 1:1, Max 150KB)</label>
+                          <div className="flex gap-3 items-center">
+                            <div className="w-16 h-16 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                              {productForm.image ? <img src={productForm.image} className="w-full h-full object-cover" alt="Preview"/> : <Camera className="w-6 h-6 text-gray-400"/>}
+                            </div>
+                            <div className="flex-1">
+                              <input type="file" id="product-img" className="hidden" accept="image/webp, image/jpeg" onChange={(e) => { if(e.target.files[0]) setProductForm({...productForm, image: URL.createObjectURL(e.target.files[0])}) }} />
+                              <label htmlFor="product-img" className="bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border border-green-200 inline-block hover:bg-green-100">Upload File</label>
+                            </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSaveProduct} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-center mb-4 border-b pb-2">
-                      <h2 className="font-bold text-gray-800">{productForm.id ? 'Edit Produk' : 'Tambah Produk Baru'}</h2>
-                      <button type="button" onClick={() => setShowProductForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs font-semibold text-gray-600 block mb-1">Foto Produk (WebP/JPG, Rasio 1:1, Max 150KB)</label>
-                        <div className="flex gap-3 items-center">
-                          <div className="w-16 h-16 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
-                            {productForm.image ? <img src={productForm.image} className="w-full h-full object-cover" alt="Preview"/> : <Camera className="w-6 h-6 text-gray-400"/>}
-                          </div>
-                          <div className="flex-1">
-                            <input type="file" id="product-img" className="hidden" accept="image/webp, image/jpeg" onChange={(e) => { if(e.target.files[0]) setProductForm({...productForm, image: URL.createObjectURL(e.target.files[0])}) }} />
-                            <label htmlFor="product-img" className="bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border border-green-200 inline-block hover:bg-green-100">Upload File</label>
-                          </div>
+                        <div><label className="text-xs font-semibold text-gray-600 block mb-1">Nama Produk</label><input required type="text" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-green-500"/></div>
+                        
+                        {/* Pilihan Kategori Ditambahkan Di Sini */}
+                        <div>
+                          <label className="text-xs font-semibold text-gray-600 block mb-1">Kategori</label>
+                          <select required value={productForm.category} onChange={e => setProductForm({...productForm, category: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-green-500 cursor-pointer">
+                            <option value="">-- Pilih Kategori --</option>
+                            {storeCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                          </select>
                         </div>
-                      </div>
-                      <div><label className="text-xs font-semibold text-gray-600 block mb-1">Nama Produk</label><input required type="text" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none"/></div>
-                      <div className="flex gap-2">
-                        <div className="flex-1"><label className="text-xs font-semibold text-gray-600 block mb-1">Harga (Rp)</label><input required type="number" value={productForm.price} onChange={e => setProductForm({...productForm, price: Number(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none"/></div>
-                        <div className="w-24"><label className="text-xs font-semibold text-gray-600 block mb-1">Stok</label><input required type="number" value={productForm.stock} onChange={e => setProductForm({...productForm, stock: Number(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none"/></div>
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="flex-1"><label className="text-xs font-semibold text-gray-600 block mb-1">Berat</label><input type="text" value={productForm.weight} onChange={e => setProductForm({...productForm, weight: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none"/></div>
-                        <div className="flex-1"><label className="text-xs font-semibold text-gray-600 block mb-1">Penyimpanan</label><input type="text" value={productForm.storage} onChange={e => setProductForm({...productForm, storage: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none"/></div>
-                      </div>
-                      <div><label className="text-xs font-semibold text-gray-600 block mb-1">Komposisi</label><input type="text" value={productForm.composition} onChange={e => setProductForm({...productForm, composition: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none"/></div>
-                      <div><label className="text-xs font-semibold text-gray-600 block mb-1">Deskripsi Produk</label><textarea value={productForm.desc} onChange={e => setProductForm({...productForm, desc: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none h-16 resize-none"/></div>
-                      <div><label className="text-xs font-semibold text-gray-600 block mb-1">Saran Penyajian</label><textarea value={productForm.saranPenyajian} onChange={e => setProductForm({...productForm, saranPenyajian: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none h-16 resize-none"/></div>
-                      
-                      <div className="flex items-center gap-2 mt-2 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-                         <input type="checkbox" id="showDetails" checked={productForm.showDetails} onChange={e => setProductForm({...productForm, showDetails: e.target.checked})} className="w-4 h-4 text-green-600 rounded border-gray-300"/>
-                         <label htmlFor="showDetails" className="text-xs font-semibold text-gray-700 cursor-pointer">Tampilkan Detail (Deskripsi, Komposisi) di Halaman Produk</label>
-                      </div>
 
-                      <button type="submit" className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-bold mt-2 hover:bg-green-700">Simpan Produk</button>
+                        <div className="flex gap-2">
+                          <div className="flex-1"><label className="text-xs font-semibold text-gray-600 block mb-1">Harga (Rp)</label><input required type="number" value={productForm.price} onChange={e => setProductForm({...productForm, price: Number(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-green-500"/></div>
+                          <div className="w-24"><label className="text-xs font-semibold text-gray-600 block mb-1">Stok</label><input required type="number" value={productForm.stock} onChange={e => setProductForm({...productForm, stock: Number(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-green-500"/></div>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1"><label className="text-xs font-semibold text-gray-600 block mb-1">Berat</label><input type="text" value={productForm.weight} onChange={e => setProductForm({...productForm, weight: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-green-500"/></div>
+                          <div className="flex-1"><label className="text-xs font-semibold text-gray-600 block mb-1">Penyimpanan</label><input type="text" value={productForm.storage} onChange={e => setProductForm({...productForm, storage: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-green-500"/></div>
+                        </div>
+                        <div><label className="text-xs font-semibold text-gray-600 block mb-1">Komposisi</label><input type="text" value={productForm.composition} onChange={e => setProductForm({...productForm, composition: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-green-500"/></div>
+                        <div><label className="text-xs font-semibold text-gray-600 block mb-1">Deskripsi Produk</label><textarea value={productForm.desc} onChange={e => setProductForm({...productForm, desc: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none h-16 resize-none focus:border-green-500"/></div>
+                        <div><label className="text-xs font-semibold text-gray-600 block mb-1">Saran Penyajian</label><textarea value={productForm.saranPenyajian} onChange={e => setProductForm({...productForm, saranPenyajian: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none h-16 resize-none focus:border-green-500"/></div>
+                        
+                        <div className="flex items-center gap-2 mt-2 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                           <input type="checkbox" id="showDetails" checked={productForm.showDetails} onChange={e => setProductForm({...productForm, showDetails: e.target.checked})} className="w-4 h-4 text-green-600 rounded border-gray-300"/>
+                           <label htmlFor="showDetails" className="text-xs font-semibold text-gray-700 cursor-pointer">Tampilkan Detail (Deskripsi, Komposisi) di Halaman Produk</label>
+                        </div>
+
+                        <button type="submit" className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-bold mt-2 hover:bg-green-700 shadow-sm">Simpan Produk</button>
+                      </div>
+                    </form>
+                  )
+                ) : (
+                  !showCategoryForm ? (
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                      <div className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 className="font-bold text-gray-800">Kategori Menu</h2>
+                        <button onClick={() => { setCategoryForm({ id: null, name: '', icon: '📦' }); setShowCategoryForm(true); }} className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"><Plus className="w-3 h-3"/> Tambah</button>
+                      </div>
+                      <div className="space-y-3">
+                        {storeCategories.map(c => (
+                          <div key={c.id} className="flex justify-between items-center border border-gray-100 p-2 rounded-xl bg-gray-50">
+                            <div className="flex gap-3 items-center px-2">
+                              <span className="text-2xl">{c.icon}</span>
+                              <p className="text-sm font-semibold text-gray-800">{c.name}</p>
+                            </div>
+                            <div className="flex gap-1">
+                              <button className="p-2 bg-white border border-blue-100 text-blue-600 rounded-lg hover:bg-blue-50" onClick={() => { setCategoryForm(c); setShowCategoryForm(true); }}><Edit className="w-4 h-4"/></button>
+                              <button className="p-2 bg-white border border-red-100 text-red-600 rounded-lg hover:bg-red-50" onClick={() => { setStoreCategories(storeCategories.filter(x => x.id !== c.id)); showToast('Kategori dihapus!'); }}><Trash2 className="w-4 h-4"/></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </form>
+                  ) : (
+                    <form onSubmit={handleSaveCategory} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                      <div className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 className="font-bold text-gray-800">{categoryForm.id ? 'Edit Kategori' : 'Tambah Kategori'}</h2>
+                        <button type="button" onClick={() => setShowCategoryForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-semibold text-gray-600 block mb-1">Nama Kategori</label>
+                          <input required type="text" value={categoryForm.name} onChange={e => setCategoryForm({...categoryForm, name: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-green-500" placeholder="Misal: Daging Sapi"/>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-600 block mb-1">Ikon (Emoji)</label>
+                          <input required type="text" value={categoryForm.icon} onChange={e => setCategoryForm({...categoryForm, icon: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm outline-none focus:border-green-500" placeholder="Misal: 🥩"/>
+                        </div>
+                        <button type="submit" className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-bold mt-2 hover:bg-green-700 shadow-sm">Simpan Kategori</button>
+                      </div>
+                    </form>
+                  )
                 )}
              </div>
           )}
@@ -592,7 +679,6 @@ export default function App() {
                        <div className="flex justify-between items-center mb-2 border-b border-gray-200 pb-2">
                          <div><span className="text-[10px] text-gray-500 block">{order.date}</span><span className="text-xs font-bold text-gray-800">{order.id}</span></div>
                          
-                         {/* Dropdown Update Status Transaksi */}
                          <select 
                            value={order.status} 
                            onChange={(e) => {
@@ -739,7 +825,6 @@ export default function App() {
           Halal • Berkualitas • Praktis
         </div>
 
-        {/* Gambar Makanan Tambahan */}
         <div className="w-full max-w-[240px] h-28 bg-white p-1 rounded-[2rem] shadow-lg mb-4 relative z-10 rotate-1 border border-gray-100">
           <img src="https://images.unsplash.com/photo-1562967914-01efa7e87832?auto=format&fit=crop&q=80&w=400" alt="Produk Bumma" className="w-full h-full object-cover rounded-[1.8rem]" />
         </div>
@@ -773,7 +858,8 @@ export default function App() {
   );
 
   const renderHome = () => {
-    // Filter Products Logic
+    const displayCategories = [{ id: 'all', name: 'Semua Produk', icon: '🍽️' }, ...storeCategories];
+
     const filteredProducts = products.filter(p => {
       const matchCat = activeCategory === 'all' || p.category === activeCategory;
       const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -806,7 +892,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Compact Search Bar */}
           <div className="relative z-10">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input 
@@ -822,7 +907,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Floating cart icon */}
         {totalItems > 0 && (
            <div className="fixed bottom-20 left-0 right-0 w-full max-w-md mx-auto z-40 pointer-events-none flex justify-end px-4">
              <button onClick={() => setCurrentScreen('cart')} className="relative w-12 h-12 bg-orange-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-orange-600 transition-transform hover:scale-105 active:scale-95 pointer-events-auto">
@@ -832,10 +916,9 @@ export default function App() {
            </div>
         )}
 
-        {/* Category Filters (Clickable) */}
         <div className="flex overflow-x-auto px-4 pt-5 pb-3 gap-3 hide-scrollbar">
-          {categories.map((cat, i) => (
-            <div key={i} onClick={() => setActiveCategory(cat.id)} className="flex flex-col items-center gap-1.5 min-w-[50px] cursor-pointer group">
+          {displayCategories.map((cat) => (
+            <div key={cat.id} onClick={() => setActiveCategory(cat.id)} className="flex flex-col items-center gap-1.5 min-w-[50px] cursor-pointer group">
               <div className={`w-11 h-11 rounded-full flex items-center justify-center overflow-hidden transition-all duration-300 ${activeCategory === cat.id ? 'bg-green-500 shadow-md ring-2 ring-green-200' : 'bg-white border border-gray-200 group-hover:border-green-300 group-hover:bg-green-50'}`}>
                  <span className="text-xl">{cat.icon}</span>
               </div>
@@ -844,7 +927,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* Product Grid */}
         {filteredProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center animate-fade-in-down">
             <Search className="w-12 h-12 text-gray-300 mb-3" />
@@ -865,7 +947,6 @@ export default function App() {
                   <h3 className="font-semibold text-gray-800 text-[11px] mb-1 line-clamp-2 leading-snug cursor-pointer pr-6" onClick={() => { setSelectedProduct(product); setCurrentScreen('detail'); }}>{product.name}</h3>
                   <div className="text-green-600 font-bold text-xs mb-2">{formatRupiah(product.price)}</div>
                   
-                  {/* Plus Icon Button mapped correctly right side */}
                   <button onClick={(e) => { e.stopPropagation(); addToCart(product); }} className="absolute bottom-2.5 right-2.5 w-7 h-7 bg-green-50 text-green-700 rounded-full flex items-center justify-center border border-green-200 hover:bg-green-100 active:scale-95 transition-all shadow-sm">
                     <Plus className="w-4 h-4" />
                   </button>
@@ -922,7 +1003,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Tampilan Kondisional Berdasarkan showDetails Checkbox dari Admin */}
         {selectedProduct.showDetails !== false && (
           <>
             <div className="bg-white p-4 mb-2 shadow-sm">
@@ -957,7 +1037,7 @@ export default function App() {
         )}
 
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-3 px-4 flex gap-3 max-w-md mx-auto z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-          <button onClick={() => { addToCart(selectedProduct, 1, false); setCurrentScreen('checkout'); }} className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold border-2 border-green-600 text-green-700 hover:bg-green-50 active:scale-95 transition-all">
+          <button onClick={() => handleBuyNowClick(selectedProduct)} className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold border-2 border-green-600 text-green-700 hover:bg-green-50 active:scale-95 transition-all">
             Beli Sekarang
           </button>
           <button onClick={() => addToCart(selectedProduct)} className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all shadow-md">
@@ -1073,7 +1153,6 @@ export default function App() {
   };
 
   const renderOrders = () => {
-    // Tampilan Spesifik Guest
     if (!currentUser) {
       return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center pb-24 px-6 text-center">
